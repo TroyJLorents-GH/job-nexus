@@ -1,5 +1,5 @@
 import { Outlet, Link } from '@tanstack/react-router'
-import { Briefcase, Home, LogOut } from 'lucide-react'
+import { Briefcase, Home, Plus, Search, FileText, MessageCircle, LogOut } from 'lucide-react'
 import { useAuth } from '../context/AuthProvider'
 
 export function Root() {
@@ -55,6 +55,64 @@ export function Root() {
                   <Home className="h-4 w-4 mr-1" />
                   Home
                 </Link>
+
+                <Link
+                  to="/jobs"
+                  className="flex items-center px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100"
+                  activeProps={{
+                    className:
+                      'flex items-center px-3 py-2 rounded-md text-sm font-medium text-blue-600 bg-blue-50',
+                  }}
+                >
+                  <Briefcase className="h-4 w-4 mr-1" />
+                  My Jobs
+                </Link>
+
+                <Link
+                  to="/discover"
+                  className="flex items-center px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100"
+                  activeProps={{
+                    className:
+                      'flex items-center px-3 py-2 rounded-md text-sm font-medium text-blue-600 bg-blue-50',
+                  }}
+                >
+                  <Search className="h-4 w-4 mr-1" />
+                  Discover
+                </Link>
+
+                {user && (
+                  <>
+                    <Link
+                      to="/resume-pipeline"
+                      className="flex items-center px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100"
+                      activeProps={{
+                        className:
+                          'flex items-center px-3 py-2 rounded-md text-sm font-medium text-blue-600 bg-blue-50',
+                      }}
+                    >
+                      <FileText className="h-4 w-4 mr-1" />
+                      Resumes
+                    </Link>
+                    <Link
+                      to="/chat"
+                      className="flex items-center px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100"
+                      activeProps={{
+                        className:
+                          'flex items-center px-3 py-2 rounded-md text-sm font-medium text-blue-600 bg-blue-50',
+                      }}
+                    >
+                      <MessageCircle className="h-4 w-4 mr-1" />
+                      Chat
+                    </Link>
+                    <Link
+                      to="/jobs/new"
+                      className="flex items-center px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100"
+                    >
+                      <Plus className="h-4 w-4 mr-1" />
+                      Add Job
+                    </Link>
+                  </>
+                )}
               </nav>
             </div>
           </div>

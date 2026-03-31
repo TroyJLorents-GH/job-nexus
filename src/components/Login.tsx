@@ -1,17 +1,24 @@
-import { useState, type FormEvent } from 'react'
+import { useState, useEffect, type FormEvent } from 'react'
+import { useNavigate } from '@tanstack/react-router'
 import { useAuth } from '../context/AuthProvider'
 import { Briefcase, Mail, Link as LinkIcon } from 'lucide-react'
 
 type Mode = 'main' | 'email' | 'emailLink'
 
 export function Login() {
-  const { loginWithGoogle, loginWithEmail, signUpWithEmail, sendEmailLink } = useAuth()
+  const { user, loginWithGoogle, loginWithEmail, signUpWithEmail, sendEmailLink } = useAuth()
+  const navigate = useNavigate()
   const [mode, setMode] = useState<Mode>('main')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isSignUp, setIsSignUp] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+
+  // Redirect to home when user signs in
+  useEffect(() => {
+    if (user) navigate({ to: '/' })
+  }, [user, navigate])
 
   const reset = () => { setError(''); setSuccess('') }
 

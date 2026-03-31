@@ -1,4 +1,4 @@
-import { Briefcase, ListChecks, FileText, Search, MessageSquare } from 'lucide-react'
+import { Briefcase, ListChecks, FileText, Search, MessageSquare, Link } from 'lucide-react'
 
 export function Landing() {
   return (
@@ -36,6 +36,11 @@ export function Landing() {
             icon={MessageSquare}
             title="AI chat"
             desc="Ask questions, prep for interviews, and get career advice."
+          />
+          <Feature
+            icon={Link}
+            title="Extract from URL"
+            desc="Paste a job link to auto-extract the description and match instantly."
           />
         </div>
 
