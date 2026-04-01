@@ -3,7 +3,7 @@ import admin from "firebase-admin";
 
 let initialized = false;
 
-function initFirebase() {
+export function initFirebase() {
   if (initialized) return;
   admin.initializeApp({
     credential: admin.credential.cert({
