@@ -64,17 +64,31 @@ export const api = {
   },
 
   async createJobApplication(data: JobApplicationFormData): Promise<JobApplication> {
-    const now = serverTimestamp()
+    const nowIso = new Date().toISOString()
     const docRef = await addDoc(userAppsCollection(), {
       ...data,
-      appliedDate: data.appliedDate || new Date().toISOString().split('T')[0],
+      appliedDate: data.appliedDate || nowIso.split('T')[0],
       stage: data.stage || 'applied',
       status: data.status || 'active',
       interviewPrep: [],
-      createdAt: now,
-      updatedAt: now,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
     })
-    return api.getJobApplication(docRef.id)
+    return {
+      id: docRef.id,
+      company: data.company ?? '',
+      position: data.position ?? '',
+      appliedDate: data.appliedDate || nowIso.split('T')[0],
+      stage: data.stage || 'applied',
+      status: data.status || 'active',
+      salary: data.salary,
+      location: data.location,
+      jobUrl: data.jobUrl,
+      notes: data.notes,
+      interviewPrep: [],
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    }
   },
 
   async updateJobApplication(id: string, patch: Partial<JobApplicationFormData>): Promise<JobApplication> {
