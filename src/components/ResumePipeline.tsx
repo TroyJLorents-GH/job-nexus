@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Upload, Trash2, FileText, ChevronDown, ChevronUp, Wand2 } from 'lucide-react'
+import { Upload, Trash2, FileText, ChevronDown, ChevronUp, Wand2, ArrowLeftRight, CheckCircle, XCircle } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useDocuments, useUploadDocument, useDeleteDocument } from '../hooks/useDocuments'
@@ -42,6 +42,7 @@ export function ResumePipeline() {
   const [tailoring, setTailoring] = useState<Record<string, boolean>>({})
   const [tailorResults, setTailorResults] = useState<Record<string, string>>({})
   const [tailorOpen, setTailorOpen] = useState<Record<string, boolean>>({})
+  const [compareOpen, setCompareOpen] = useState<Record<string, boolean>>({})
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -302,6 +303,30 @@ export function ResumePipeline() {
                     </div>
                   )}
 
+                  {/* Side-by-Side Comparison toggle */}
+                  {(result.matchedSkills?.length || result.missingSkills?.length) ? (
+                    <>
+                      <button
+                        onClick={() => toggle(setCompareOpen, result.documentId)}
+                        className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 font-semibold"
+                      >
+                        <ArrowLeftRight className="h-4 w-4" />
+                        Side-by-Side Comparison
+                        {compareOpen[result.documentId] ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                      </button>
+
+                      {compareOpen[result.documentId] && (
+                        <ComparisonView
+                          matchedSkills={result.matchedSkills || []}
+                          missingSkills={result.missingSkills || []}
+                          resumeKeyPhrases={result.resumeKeyPhrases || []}
+                          filename={result.filename}
+                          skillMatchPercent={result.skillMatchPercent ?? 0}
+                        />
+                      )}
+                    </>
+                  ) : null}
+
                   {/* Tailor button */}
                   <div className="flex items-center gap-2">
                     <button
@@ -338,6 +363,121 @@ export function ResumePipeline() {
               ))}
             </div>
           )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** Side-by-side comparison component */
+function ComparisonView({
+  matchedSkills,
+  missingSkills,
+  resumeKeyPhrases,
+  filename,
+  skillMatchPercent,
+}: {
+  matchedSkills: string[]
+  missingSkills: string[]
+  resumeKeyPhrases: string[]
+  filename?: string
+  skillMatchPercent: number
+}) {
+  const allJobSkills = [...matchedSkills, ...missingSkills]
+  const extraResumeSkills = resumeKeyPhrases.filter(
+    (phrase) => !allJobSkills.some((s) => s.toLowerCase() === phrase.toLowerCase())
+  )
+
+  return (
+    <div className="border rounded-lg p-4 bg-gray-50 space-y-4">
+      {/* Header stats */}
+      <div className="flex justify-center gap-8 flex-wrap">
+        <div className="text-center">
+          <p className="text-3xl font-bold text-green-600">{matchedSkills.length}</p>
+          <p className="text-xs text-gray-500">Matched</p>
+        </div>
+        <div className="text-center">
+          <p className="text-3xl font-bold text-red-500">{missingSkills.length}</p>
+          <p className="text-xs text-gray-500">Missing</p>
+        </div>
+        <div className="text-center">
+          <p className="text-3xl font-bold text-blue-600">{skillMatchPercent}%</p>
+          <p className="text-xs text-gray-500">Coverage</p>
+        </div>
+      </div>
+
+      {/* Two-column layout */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Left: Job Requirements */}
+        <div>
+          <p className="text-sm font-bold text-gray-900 mb-2">
+            Job Requirements ({allJobSkills.length})
+          </p>
+          <div className="space-y-1.5">
+            {matchedSkills.map((skill, i) => (
+              <div key={`m-${i}`} className="flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />
+                <span className="text-sm text-green-700">{skill}</span>
+              </div>
+            ))}
+            {missingSkills.map((skill, i) => (
+              <div key={`x-${i}`} className="flex items-center gap-2">
+                <XCircle className="h-4 w-4 text-red-500 shrink-0" />
+                <span className="text-sm text-red-600">{skill}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Right: Your Resume Skills */}
+        <div>
+          <p className="text-sm font-bold text-gray-900 mb-2">
+            Your Resume: {filename || 'Resume'}
+          </p>
+          <div className="space-y-1.5">
+            {matchedSkills.map((skill, i) => (
+              <div key={`rm-${i}`} className="flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />
+                <span className="text-sm text-green-700">{skill}</span>
+              </div>
+            ))}
+            {missingSkills.map((skill, i) => (
+              <div key={`rx-${i}`} className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded-full border-2 border-dashed border-gray-400 shrink-0" />
+                <span className="text-sm text-gray-400 italic">{skill}</span>
+              </div>
+            ))}
+            {extraResumeSkills.length > 0 && (
+              <>
+                <p className="text-xs text-gray-500 mt-2 mb-1">Additional skills on resume</p>
+                {extraResumeSkills.slice(0, 10).map((skill, i) => (
+                  <div key={`e-${i}`} className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-gray-400 shrink-0 ml-1" />
+                    <span className="text-sm text-gray-500">{skill}</span>
+                  </div>
+                ))}
+                {extraResumeSkills.length > 10 && (
+                  <p className="text-xs text-gray-500">+{extraResumeSkills.length - 10} more</p>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Visual bar */}
+      <div className="px-1">
+        <div className="flex justify-between mb-1">
+          <span className="text-xs font-semibold text-green-600">{matchedSkills.length} matched</span>
+          <span className="text-xs font-semibold text-red-500">{missingSkills.length} gaps</span>
+        </div>
+        <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+          <div
+            className={`h-full rounded-full transition-all duration-500 ${
+              skillMatchPercent >= 75 ? 'bg-green-500' : skillMatchPercent >= 50 ? 'bg-yellow-500' : 'bg-red-500'
+            }`}
+            style={{ width: `${skillMatchPercent}%` }}
+          />
         </div>
       </div>
     </div>
