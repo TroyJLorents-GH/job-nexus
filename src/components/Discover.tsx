@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Search, MapPin, Building, DollarSign, ExternalLink, Plus, Clock, FileText, Link as LinkIcon } from 'lucide-react'
+import { Search, MapPin, Building, DollarSign, ExternalLink, Plus, Clock, FileText, Link as LinkIcon, X } from 'lucide-react'
 import { useAuth } from '../context/AuthProvider'
 import { useCreateJobApplication } from '../hooks/useJobApplications'
 import { apiFetch } from '../services/api'
@@ -20,6 +20,14 @@ interface SearchResponse {
   jobs: JobResult[]
   total: number
   error?: string
+  errors?: { platform: string; slug: string; error: string }[]
+}
+
+type AtsPlatform = 'greenhouse' | 'lever' | 'ashby'
+interface AtsCompany {
+  platform: AtsPlatform
+  slug: string
+  name?: string
 }
 
 export function Discover() {
@@ -37,6 +45,14 @@ export function Discover() {
   const [addingJob, setAddingJob] = useState<string | null>(null)
   const [extractUrl, setExtractUrl] = useState('')
   const [extracting, setExtracting] = useState(false)
+
+  // ATS company search state
+  const [atsCompanies, setAtsCompanies] = useState<AtsCompany[]>([])
+  const [atsPlatform, setAtsPlatform] = useState<AtsPlatform>('greenhouse')
+  const [atsSlug, setAtsSlug] = useState('')
+  const [atsName, setAtsName] = useState('')
+  const [atsSearching, setAtsSearching] = useState(false)
+  const [atsErrors, setAtsErrors] = useState<{ platform: string; slug: string; error: string }[]>([])
 
   const createJob = useCreateJobApplication()
 
@@ -168,6 +184,57 @@ export function Discover() {
   const handleMatchResumes = (job: JobResult) => {
     const desc = job.full_description || job.description || `${job.title} at ${job.company} - ${job.location}`
     window.location.href = `/resume-pipeline?jd=${encodeURIComponent(desc)}`
+  }
+
+  const handleAddAtsCompany = () => {
+    const slug = atsSlug.trim().toLowerCase()
+    if (!slug) return
+    if (atsCompanies.some((c) => c.platform === atsPlatform && c.slug === slug)) {
+      setAtsSlug('')
+      setAtsName('')
+      return
+    }
+    setAtsCompanies((prev) => [
+      ...prev,
+      { platform: atsPlatform, slug, name: atsName.trim() || undefined },
+    ])
+    setAtsSlug('')
+    setAtsName('')
+  }
+
+  const handleRemoveAtsCompany = (platform: AtsPlatform, slug: string) => {
+    setAtsCompanies((prev) => prev.filter((c) => !(c.platform === platform && c.slug === slug)))
+  }
+
+  const handleAtsSearch = async () => {
+    if (atsCompanies.length === 0) {
+      setError('Add at least one company to search their ATS.')
+      return
+    }
+    setAtsSearching(true)
+    setError(null)
+    setAtsErrors([])
+    try {
+      const apiBase = import.meta.env.VITE_JOBSPY_API_URL || '/api'
+      const response = await fetch(`${apiBase.replace(/\/$/, '')}/ats-jobs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          companies: atsCompanies,
+          search_term: searchTerm.trim() || undefined,
+          remote_only: remoteOnly || undefined,
+        }),
+      })
+      const data: SearchResponse = await response.json()
+      if (!response.ok) throw new Error(data.error || `Search failed: ${response.statusText}`)
+      setResults(Array.isArray(data.jobs) ? data.jobs : [])
+      if (data.errors && data.errors.length > 0) setAtsErrors(data.errors)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'ATS search failed')
+      setResults([])
+    } finally {
+      setAtsSearching(false)
+    }
   }
 
   return (
@@ -317,6 +384,106 @@ export function Discover() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Company Pages (ATS) */}
+        <div className="bg-white rounded-lg shadow p-6 mb-8">
+          <h2 className="text-lg font-semibold text-gray-900 mb-1">Company Pages (ATS)</h2>
+          <p className="text-sm text-gray-600 mb-4">
+            Fetch jobs directly from company career pages on Greenhouse, Lever, or Ashby. Faster and cleaner than
+            scraping. The job-title filter above also applies here.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Platform</label>
+              <select
+                value={atsPlatform}
+                onChange={(e) => setAtsPlatform(e.target.value as AtsPlatform)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="greenhouse">Greenhouse</option>
+                <option value="lever">Lever</option>
+                <option value="ashby">Ashby</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Company slug</label>
+              <input
+                type="text"
+                placeholder="e.g., stripe"
+                value={atsSlug}
+                onChange={(e) => setAtsSlug(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleAddAtsCompany() }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Display name (optional)</label>
+              <input
+                type="text"
+                placeholder="e.g., Stripe"
+                value={atsName}
+                onChange={(e) => setAtsName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleAddAtsCompany() }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+            <div className="flex items-end">
+              <button
+                onClick={handleAddAtsCompany}
+                disabled={!atsSlug.trim()}
+                className="w-full px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-md text-gray-800 disabled:opacity-50"
+              >
+                Add Company
+              </button>
+            </div>
+          </div>
+
+          {atsCompanies.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-3">
+              {atsCompanies.map((c) => (
+                <span
+                  key={`${c.platform}:${c.slug}`}
+                  className="inline-flex items-center gap-2 px-3 py-1 bg-blue-50 border border-blue-200 rounded-full text-sm text-blue-800"
+                >
+                  <span className="font-medium">{c.name || c.slug}</span>
+                  <span className="text-xs text-blue-600">{c.platform}</span>
+                  <button
+                    onClick={() => handleRemoveAtsCompany(c.platform, c.slug)}
+                    className="hover:text-blue-900"
+                    aria-label={`Remove ${c.slug}`}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+
+          <button
+            onClick={handleAtsSearch}
+            disabled={atsSearching || atsCompanies.length === 0}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
+          >
+            {atsSearching ? (
+              <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> Searching ATS...</>
+            ) : (
+              <><Building className="h-4 w-4" /> Search Company Pages ({atsCompanies.length})</>
+            )}
+          </button>
+
+          {atsErrors.length > 0 && (
+            <div className="mt-3 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+              <div className="font-medium mb-1">Couldn't fetch {atsErrors.length} source(s):</div>
+              <ul className="list-disc list-inside">
+                {atsErrors.map((e, i) => (
+                  <li key={i}>
+                    <span className="font-mono">{e.platform}:{e.slug}</span> — {e.error}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
 
         {/* Extract from URL */}
