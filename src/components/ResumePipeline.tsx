@@ -28,6 +28,7 @@ export function ResumePipeline() {
   const deleteDoc = useDeleteDocument()
 
   const [jobDescription, setJobDescription] = useState('')
+  const [jdCollapsed, setJdCollapsed] = useState(false)
 
   // Pre-fill job description from URL search params (from Discover page)
   useEffect(() => {
@@ -71,6 +72,7 @@ export function ResumePipeline() {
       const data = await resp.json()
       if (!resp.ok) throw new Error(data.error || 'Matching failed')
       setMatchResults(data)
+      setJdCollapsed(true)
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -174,25 +176,49 @@ export function ResumePipeline() {
         <div className="flex-1 min-w-0 space-y-4">
           {/* Job description input */}
           <div className="bg-white rounded-lg shadow p-4">
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">Job Description</h2>
-            <textarea
-              rows={4}
-              placeholder="Paste the job description here..."
-              value={jobDescription}
-              onChange={(e) => setJobDescription(e.target.value)}
-              className="w-full border border-gray-300 rounded-md p-2 text-sm focus:ring-blue-500 focus:border-blue-500 mb-3"
-            />
             <button
-              onClick={handleMatch}
-              disabled={matching || !jobDescription.trim() || documents.length === 0}
-              className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              type="button"
+              onClick={() => setJdCollapsed((c) => !c)}
+              className="flex w-full items-center justify-between text-left"
+              aria-expanded={!jdCollapsed}
             >
-              {matching ? (
-                <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> Matching...</>
-              ) : (
-                'Match Resumes'
-              )}
+              <h2 className="text-lg font-semibold text-gray-900">Job Description</h2>
+              <span className="flex items-center gap-1 text-xs text-gray-500">
+                {jdCollapsed ? 'Expand' : 'Collapse'}
+                {jdCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+              </span>
             </button>
+            {jdCollapsed ? (
+              <button
+                type="button"
+                onClick={() => setJdCollapsed(false)}
+                className="mt-2 w-full text-left text-sm text-gray-600 line-clamp-2 hover:text-gray-900"
+                title="Click to expand"
+              >
+                {jobDescription.trim() || <span className="italic text-gray-400">No job description — click to add one</span>}
+              </button>
+            ) : (
+              <>
+                <textarea
+                  rows={4}
+                  placeholder="Paste the job description here..."
+                  value={jobDescription}
+                  onChange={(e) => setJobDescription(e.target.value)}
+                  className="mt-2 w-full border border-gray-300 rounded-md p-2 text-sm focus:ring-blue-500 focus:border-blue-500 mb-3"
+                />
+                <button
+                  onClick={handleMatch}
+                  disabled={matching || !jobDescription.trim() || documents.length === 0}
+                  className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {matching ? (
+                    <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> Matching...</>
+                  ) : (
+                    'Match Resumes'
+                  )}
+                </button>
+              </>
+            )}
           </div>
 
           {/* Error */}
