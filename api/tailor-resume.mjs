@@ -1,23 +1,25 @@
 import { initFirebase, verifyToken } from "./_auth.mjs";
+import { handleCors, sendAuthError } from "./_http.mjs";
+import { checkRateLimit } from "./_ratelimit.mjs";
 
 initFirebase();
 
-export default async function handler(req, res) {
-  if (req.method === "OPTIONS") {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-    return res.status(204).end();
-  }
+const MAX_TEXT_CHARS = 20000;
 
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
+export default async function handler(req, res) {
+  if (handleCors(req, res, ["POST"])) return;
 
   const auth = await verifyToken(req);
-  if (auth.error) return res.status(401).json({ error: auth.error });
+  if (auth.error) return sendAuthError(res, auth.error);
+
+  if (!(await checkRateLimit(res, auth.userId, "tailor-resume"))) return;
 
   try {
-    const { resumeText, jobDescription, matchedSkills = [], missingSkills = [] } = req.body || {};
+    const body = req.body || {};
+    const resumeText = (body.resumeText || "").toString().slice(0, MAX_TEXT_CHARS);
+    const jobDescription = (body.jobDescription || "").toString().slice(0, MAX_TEXT_CHARS);
+    const matchedSkills = Array.isArray(body.matchedSkills) ? body.matchedSkills : [];
+    const missingSkills = Array.isArray(body.missingSkills) ? body.missingSkills : [];
 
     if (!resumeText || !jobDescription) {
       return res.status(400).json({ error: "resumeText and jobDescription are required" });
@@ -90,6 +92,6 @@ export default async function handler(req, res) {
     return res.status(200).json({ suggestions });
   } catch (err) {
     console.error("Tailor error:", err);
-    return res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: "Resume tailoring failed" });
   }
 }

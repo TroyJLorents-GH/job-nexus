@@ -10,7 +10,12 @@
 //
 // Response: { jobs: JobResult[], total: number, errors: [{ platform, slug, error }] }
 
+import { verifyToken } from "./_auth.mjs";
+import { handleCors, sendAuthError } from "./_http.mjs";
+import { checkRateLimit } from "./_ratelimit.mjs";
+
 const FETCH_TIMEOUT_MS = 8000;
+const MAX_COMPANIES = 15;
 
 function stripHtml(html) {
   if (!html) return "";
@@ -122,16 +127,16 @@ const FETCHERS = {
 };
 
 export default async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  if (handleCors(req, res, ["POST"])) return;
 
-  if (req.method === "OPTIONS") return res.status(204).end();
-  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+  const auth = await verifyToken(req);
+  if (auth.error) return sendAuthError(res, auth.error);
+
+  if (!(await checkRateLimit(res, auth.userId, "ats-jobs"))) return;
 
   try {
     const body = req.body || {};
-    const companies = Array.isArray(body.companies) ? body.companies : [];
+    const companies = (Array.isArray(body.companies) ? body.companies : []).slice(0, MAX_COMPANIES);
     const searchTerm = (body.search_term || "").toString().trim().toLowerCase();
     const remoteOnly = !!body.remote_only;
 
@@ -182,6 +187,6 @@ export default async function handler(req, res) {
     return res.status(200).json({ jobs: filtered, total: filtered.length, errors });
   } catch (err) {
     console.error("ats-jobs error:", err);
-    return res.status(500).json({ error: err?.message || "Internal error" });
+    return res.status(500).json({ error: "Failed to fetch ATS jobs" });
   }
 }

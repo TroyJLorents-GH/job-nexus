@@ -1,39 +1,99 @@
+import { lookup } from "node:dns/promises";
+import { isIP } from "node:net";
 import OpenAI from "openai";
 import { initFirebase, verifyToken } from "./_auth.mjs";
+import { handleCors, sendAuthError } from "./_http.mjs";
+import { checkRateLimit } from "./_ratelimit.mjs";
 
 initFirebase();
 
-export default async function handler(req, res) {
-  if (req.method === "OPTIONS") {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-    return res.status(204).end();
+function isPrivateIp(ip) {
+  if (ip.includes(":")) {
+    // IPv6: loopback, link-local, unique-local, v4-mapped private
+    const low = ip.toLowerCase();
+    return (
+      low === "::1" ||
+      low.startsWith("fe80:") ||
+      low.startsWith("fc") ||
+      low.startsWith("fd") ||
+      low.startsWith("::ffff:")
+    );
   }
+  const parts = ip.split(".").map(Number);
+  const [a, b] = parts;
+  return (
+    a === 10 ||
+    a === 127 ||
+    a === 0 ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    (a === 169 && b === 254) || // link-local / cloud metadata
+    (a === 100 && b >= 64 && b <= 127) // CGNAT
+  );
+}
 
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
+/** SSRF guard: only public http(s) URLs on standard ports. */
+async function validateUrl(rawUrl) {
+  let parsed;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    return "Invalid URL";
   }
+  if (!["http:", "https:"].includes(parsed.protocol)) return "Only http(s) URLs allowed";
+  if (parsed.port && !["80", "443"].includes(parsed.port)) return "Non-standard port not allowed";
+
+  const host = parsed.hostname;
+  if (isIP(host)) {
+    if (isPrivateIp(host)) return "URL not allowed";
+  } else {
+    try {
+      const { address } = await lookup(host);
+      if (isPrivateIp(address)) return "URL not allowed";
+    } catch {
+      return "Could not resolve URL host";
+    }
+  }
+  return null;
+}
+
+export default async function handler(req, res) {
+  if (handleCors(req, res, ["POST"])) return;
 
   const auth = await verifyToken(req);
-  if (auth.error) return res.status(401).json({ error: auth.error });
+  if (auth.error) return sendAuthError(res, auth.error);
+
+  if (!(await checkRateLimit(res, auth.userId, "extract-job"))) return;
 
   try {
     const { url } = req.body || {};
 
-    if (!url || !url.startsWith("http")) {
+    if (!url || typeof url !== "string") {
       return res.status(400).json({ error: "Valid URL required" });
     }
+    const urlError = await validateUrl(url);
+    if (urlError) return res.status(400).json({ error: urlError });
 
-    // Fetch the page HTML
-    const pageResp = await fetch(url, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      },
-      redirect: "follow",
-      signal: AbortSignal.timeout(15000),
-    });
+    // Fetch the page HTML — redirects followed manually so every hop is re-validated
+    let currentUrl = url;
+    let pageResp;
+    for (let hop = 0; hop < 4; hop++) {
+      pageResp = await fetch(currentUrl, {
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        },
+        redirect: "manual",
+        signal: AbortSignal.timeout(15000),
+      });
+      if (pageResp.status < 300 || pageResp.status >= 400) break;
+      const location = pageResp.headers.get("location");
+      if (!location) break;
+      currentUrl = new URL(location, currentUrl).toString();
+      const redirectError = await validateUrl(currentUrl);
+      if (redirectError) return res.status(400).json({ error: redirectError });
+    }
 
     if (!pageResp.ok) {
       return res.status(502).json({ error: `Failed to fetch URL (${pageResp.status})` });
@@ -97,7 +157,10 @@ export default async function handler(req, res) {
     return res.status(200).json({ jobDescription: extracted });
   } catch (err) {
     console.error("Extract job error:", err);
-    const message = err.name === "TimeoutError" ? "URL took too long to respond" : err.message;
-    return res.status(500).json({ error: "Failed to extract job description", detail: message });
+    const message =
+      err.name === "TimeoutError"
+        ? "URL took too long to respond"
+        : "Failed to extract job description";
+    return res.status(500).json({ error: message });
   }
 }

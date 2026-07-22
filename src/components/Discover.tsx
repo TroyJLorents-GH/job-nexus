@@ -76,13 +76,15 @@ export function Discover() {
       return
     }
 
+    if (!user) {
+      setError('Sign in to search jobs.')
+      return
+    }
+
     setIsSearching(true)
     setError(null)
 
     try {
-      // Use Vercel function in production, env var for local dev
-      const apiBase = import.meta.env.VITE_JOBSPY_API_URL || '/api'
-
       let hours_old = daysOld > 0 ? daysOld * 24 : undefined
       if (usingIndeed && remoteOnly) {
         hours_old = undefined
@@ -104,7 +106,7 @@ export function Discover() {
         payload.google_search_term = `${searchTerm} jobs${locPart}${since}`.trim()
       }
 
-      const response = await fetch(`${apiBase.replace(/\/$/, '')}/search-jobs`, {
+      const response = await apiFetch('/search-jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -207,6 +209,10 @@ export function Discover() {
   }
 
   const handleAtsSearch = async () => {
+    if (!user) {
+      setError('Sign in to search jobs.')
+      return
+    }
     if (atsCompanies.length === 0) {
       setError('Add at least one company to search their ATS.')
       return
@@ -215,8 +221,7 @@ export function Discover() {
     setError(null)
     setAtsErrors([])
     try {
-      const apiBase = import.meta.env.VITE_JOBSPY_API_URL || '/api'
-      const response = await fetch(`${apiBase.replace(/\/$/, '')}/ats-jobs`, {
+      const response = await apiFetch('/ats-jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
