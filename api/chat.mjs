@@ -1,7 +1,13 @@
 import OpenAI from "openai";
 import { initFirebase, verifyToken } from "./_auth.mjs";
+import { handleCors, sendAuthError } from "./_http.mjs";
+import { checkRateLimit } from "./_ratelimit.mjs";
+import { supabase } from "./_supabase.mjs";
+import { embedBatch } from "./_embed.mjs";
 
 initFirebase();
+
+const MAX_MESSAGE_CHARS = 20000;
 
 async function handleFoundryChat(message) {
   const { ClientSecretCredential } = await import("@azure/identity");
@@ -106,29 +112,43 @@ async function handleOpenAIChat(message, model, mode, history) {
 }
 
 export default async function handler(req, res) {
-  if (req.method === "OPTIONS") {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-    return res.status(204).end();
-  }
-
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
+  if (handleCors(req, res, ["POST"])) return;
 
   const auth = await verifyToken(req);
-  if (auth.error) return res.status(401).json({ error: auth.error });
+  if (auth.error) return sendAuthError(res, auth.error);
+
+  if (!(await checkRateLimit(res, auth.userId, "chat"))) return;
 
   try {
-    const { message, model = "gpt-5", mode = "general", history = [] } = req.body || {};
+    const { message: rawMessage, model = "gpt-5", mode = "general", history = [] } = req.body || {};
+    const message = (rawMessage || "").toString().slice(0, MAX_MESSAGE_CHARS);
 
     if (!message) {
       return res.status(400).json({ error: "No message provided." });
     }
 
-    // Foundry Agent — no streaming (returns full response)
+    // Foundry Agent — no streaming (returns full response).
+    // Document context now comes from Supabase hybrid search (the agent's old
+    // Document Intelligence tools pointed at the decommissioned Azure stack).
     if (model === "PersonalAssistant") {
-      const enrichedMessage = `[System: When calling Document Intelligence API tools (getDocuments, searchDocuments, semanticSearch), always pass userId="${auth.userId}" as a query parameter.]\n\n${message}`;
+      let context = "";
+      try {
+        const [embedding] = await embedBatch([message]);
+        const { data: hits } = await supabase().rpc("hybrid_search", {
+          p_user_id: auth.userId,
+          p_query_text: message,
+          p_query_embedding: embedding,
+          p_match_count: 8,
+        });
+        if (hits?.length) {
+          context = hits.map((h) => h.content).join("\n---\n");
+        }
+      } catch (ragErr) {
+        console.error("PersonalAssistant retrieval failed (continuing without context):", ragErr);
+      }
+      const enrichedMessage = context
+        ? `Context from uploaded documents:\n${context}\n\nUser question: ${message}`
+        : message;
       const response = await handleFoundryChat(enrichedMessage);
       return res.status(200).json({ response });
     }
@@ -158,9 +178,9 @@ export default async function handler(req, res) {
     console.error("Chat error:", err);
     // If headers already sent (mid-stream error), just end
     if (res.headersSent) {
-      res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
+      res.write(`data: ${JSON.stringify({ error: "Chat failed" })}\n\n`);
       return res.end();
     }
-    return res.status(500).json({ error: "Chat failed", detail: err.message });
+    return res.status(500).json({ error: "Chat failed" });
   }
 }
