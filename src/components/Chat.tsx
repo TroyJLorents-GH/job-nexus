@@ -17,12 +17,13 @@ interface ChatSession {
   timestamp: string
 }
 
+// Values are stable ids mapped server-side (api/chat.mjs MODEL_MAP) to gateway models
 const MODELS = [
-  { value: 'gpt-5', label: 'GPT-5' },
-  { value: 'gpt-4.1', label: 'GPT-4.1' },
-  { value: 'gpt-4.1-mini', label: 'GPT-4.1 Mini' },
-  { value: 'gpt-4o', label: 'GPT-4o' },
-  { value: 'gpt-4o-mini', label: 'GPT-4o Mini' },
+  { value: 'gpt-5', label: 'GPT-5.5' },
+  { value: 'gpt-4.1', label: 'GPT-5.4' },
+  { value: 'gpt-4.1-mini', label: 'GPT-5.4 Mini' },
+  { value: 'gpt-4o', label: 'Claude 5 Sonnet' },
+  { value: 'gpt-4o-mini', label: 'GPT-5.4 Nano (fast)' },
   { value: 'PersonalAssistant', label: 'Personal Assistant' },
 ] as const
 

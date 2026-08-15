@@ -1,7 +1,7 @@
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
-import OpenAI from "openai";
 import { initFirebase, verifyToken } from "./_auth.mjs";
+import { llm, MODELS } from "./_llm.mjs";
 import { handleCors, sendAuthError } from "./_http.mjs";
 import { checkRateLimit } from "./_ratelimit.mjs";
 
@@ -123,11 +123,9 @@ export default async function handler(req, res) {
       });
     }
 
-    // Use GPT to extract the job description
-    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-    const response = await client.chat.completions.create({
-      model: "gpt-4.1-mini",
+    // Use an LLM to extract the job description
+    const response = await llm().chat.completions.create({
+      model: MODELS.fast,
       messages: [
         {
           role: "system",

@@ -1,9 +1,9 @@
-import OpenAI from "openai";
 import { initFirebase, verifyToken } from "./_auth.mjs";
 import { handleCors, sendAuthError } from "./_http.mjs";
 import { checkRateLimit } from "./_ratelimit.mjs";
 import { supabase } from "./_supabase.mjs";
 import { embedBatch } from "./_embed.mjs";
+import { llm, MODELS } from "./_llm.mjs";
 
 initFirebase();
 
@@ -57,13 +57,27 @@ async function handleFoundryChat(message) {
   return "I couldn't generate a response. Please try again.";
 }
 
-async function handleOpenAIChat(message, model, mode, history) {
-  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+// Frontend model ids → gateway model strings ("<provider>/<name>")
+const MODEL_MAP = {
+  "gpt-5": "openai/gpt5_5",
+  "gpt-4.1": "openai/gpt5_4",
+  "gpt-4.1-mini": "openai/gpt5_4_mini",
+  "gpt-4o": "aws/claude5_sonnet",
+  "gpt-4o-mini": "openai/gpt5_4_nano",
+  "gpt-3.5-turbo": "openai/gpt5_4_nano",
+};
 
-  // Moderation check
-  const moderation = await client.moderations.create({ input: message });
-  if (moderation.results[0].flagged) {
-    return { flagged: true, text: "I cannot respond to that type of content." };
+async function handleOpenAIChat(message, model, mode, history) {
+  const client = llm();
+
+  // Moderation is best-effort: the gateway does not expose /v1/moderations
+  try {
+    const moderation = await client.moderations.create({ input: message });
+    if (moderation.results?.[0]?.flagged) {
+      return { flagged: true, text: "I cannot respond to that type of content." };
+    }
+  } catch (modErr) {
+    if (modErr?.status !== 404) console.error("moderation check skipped:", modErr?.message);
   }
 
   const isDocQuery = message.includes("Context from uploaded documents:");
@@ -84,9 +98,7 @@ async function handleOpenAIChat(message, model, mode, history) {
     temperature = 0.3;
   }
 
-  const supported = ["gpt-4o", "gpt-4o-mini", "gpt-5", "gpt-4.1-mini", "gpt-3.5-turbo", "gpt-4.1"];
-  const normalizedModel = supported.includes(model) ? model : "gpt-5";
-  const usesMaxCompletionTokens = normalizedModel.startsWith("gpt-4o") || normalizedModel.startsWith("gpt-4.1");
+  const gatewayModel = MODEL_MAP[model] || MODELS.fast;
 
   // Build messages array with conversation history
   const messages = [{ role: "system", content: systemMessage }];
@@ -95,20 +107,15 @@ async function handleOpenAIChat(message, model, mode, history) {
   }
   messages.push({ role: "user", content: message });
 
-  const createArgs = {
-    model: normalizedModel,
-    messages,
-    temperature,
-    stream: true,
+  return {
+    stream: await client.chat.completions.create({
+      model: gatewayModel,
+      messages,
+      temperature,
+      max_tokens: maxTokens,
+      stream: true,
+    }),
   };
-
-  if (usesMaxCompletionTokens) {
-    createArgs.max_completion_tokens = maxTokens;
-  } else {
-    createArgs.max_tokens = maxTokens;
-  }
-
-  return { stream: await client.chat.completions.create(createArgs) };
 }
 
 export default async function handler(req, res) {

@@ -1,6 +1,6 @@
-// v2 — resume upload: parse (LlamaParse → GPT-4o-mini vision fallback) → chunk → embed → store
-import OpenAI from "openai";
+// v2 — resume upload: parse (LlamaParse → vision-model fallback) → chunk → embed → store
 import { verifyToken } from "../_auth.mjs";
+import { llm, MODELS } from "../_llm.mjs";
 import { handleCors, sendAuthError } from "../_http.mjs";
 import { supabase } from "../_supabase.mjs";
 import { llamaparseToMarkdown, LowTextError } from "../_llamaparse.mjs";
@@ -13,28 +13,30 @@ export const config = { api: { bodyParser: false } };
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
 
-async function gpt4oVisionMarkdown(fileBytes, filename) {
-  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  const resp = await client.responses.create({
-    model: "gpt-4o-mini",
-    input: [
+async function visionMarkdown(fileBytes, filename) {
+  // Chat-completions file input (gateway is OpenAI-compatible on /v1/chat/completions only)
+  const resp = await llm().chat.completions.create({
+    model: MODELS.fast,
+    messages: [
       {
         role: "user",
         content: [
           {
-            type: "input_file",
-            filename,
-            file_data: `data:application/pdf;base64,${Buffer.from(fileBytes).toString("base64")}`,
+            type: "file",
+            file: {
+              filename,
+              file_data: `data:application/pdf;base64,${Buffer.from(fileBytes).toString("base64")}`,
+            },
           },
           {
-            type: "input_text",
+            type: "text",
             text: "Extract ALL text from this document as clean markdown. Preserve section headings, bullet points, and structure. Output only the markdown.",
           },
         ],
       },
     ],
   });
-  return resp.output_text || "";
+  return resp.choices?.[0]?.message?.content || "";
 }
 
 async function parseFile(fileBytes, filename) {
@@ -49,11 +51,11 @@ async function parseFile(fileBytes, filename) {
     const { markdown, pageCount } = await llamaparseToMarkdown(fileBytes, filename);
     return { markdown, pageCount, parser: "llamaparse" };
   } catch (err) {
-    // Scanned/image PDFs: fall back to GPT-4o-mini vision
+    // Scanned/image PDFs: fall back to vision model
     if (err instanceof LowTextError && ext === "pdf") {
-      const markdown = await gpt4oVisionMarkdown(fileBytes, filename);
+      const markdown = await visionMarkdown(fileBytes, filename);
       if (markdown.trim().length < 50) throw new Error("Could not extract text from document");
-      return { markdown, pageCount: null, parser: "gpt4o-vision" };
+      return { markdown, pageCount: null, parser: "vision" };
     }
     throw err;
   }

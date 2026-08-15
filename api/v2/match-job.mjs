@@ -1,25 +1,19 @@
 // v2 — job matching: JD requirement extraction → hybrid RRF search → LLM skill-gap
 // analysis per resume → blended confidence + recommendation.
 // Response contract must match MatchResult/MatchResponse in src/components/ResumePipeline.tsx.
-import OpenAI from "openai";
 import { verifyToken } from "../_auth.mjs";
 import { handleCors, sendAuthError } from "../_http.mjs";
 import { supabase } from "../_supabase.mjs";
 import { embedBatch } from "../_embed.mjs";
 import { checkRateLimit } from "../_ratelimit.mjs";
+import { llm, MODELS } from "../_llm.mjs";
 
 const MAX_JD_CHARS = 20000;
 const TOP_DOCS = 5;
 
-let _openai = null;
-function openai() {
-  if (!_openai) _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  return _openai;
-}
-
 async function jsonCall(system, user) {
-  const resp = await openai().chat.completions.create({
-    model: "gpt-4o-mini",
+  const resp = await llm().chat.completions.create({
+    model: MODELS.fast,
     response_format: { type: "json_object" },
     messages: [
       { role: "system", content: system },
