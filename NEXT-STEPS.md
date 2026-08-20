@@ -1,37 +1,45 @@
 # Next Steps — Post-Migration Checklist
 
-Status as of 2026-07-19: All migration + hardening code pushed to main. Supabase live
-(`job-nexus-prod`, us-east-1). Env vars in Vercel (`SUPABASE_URL`,
-`SUPABASE_SERVICE_ROLE_KEY`, `LLAMA_CLOUD_API_KEY`). This push triggers the deploy
-that puts the new stack live. **Azure VM no longer receives traffic.**
+Status as of 2026-08-20: **Migration verified working in production.** Supabase live
+(`job-nexus-prod`, us-east-1), RLS enabled, real resume uploaded and indexed.
+All LLM calls now route through the ASU AIML gateway (`LLM_API_KEY`), not OpenAI direct.
+**Azure VM no longer receives traffic.**
+
+Verified end to end: upload "Lorents Troy - Resume.pdf" (2 pages) -> LlamaParse ->
+5 chunks -> 5 embeddings (1536d via gateway) -> stored in Supabase. hybrid_search
+RRF ranks the TECHNICAL SKILLS chunk ~2x above others for a full-stack JD, which is
+correct fusion behavior (it hits both the BM25 and vector lists).
 
 ---
 
 ## 1. Verify the deploy (do first, ~15 min)
 
-- [ ] Vercel dashboard → job-nexus → confirm the deployment from this push succeeded
-- [ ] Open https://job-nexus-delta.vercel.app, sign in
-- [ ] **Upload a resume** (Resume Pipeline) → should parse via LlamaParse and list the doc
+- [x] Vercel dashboard → job-nexus → confirm the deployment from this push succeeded
+- [x] Open https://job-nexus-delta.vercel.app, sign in
+- [x] **Upload a resume** (Resume Pipeline) → should parse via LlamaParse and list the doc
+- [x] **Match** pipeline verified (RRF ranking correct on real resume); still worth one browser run
 - [ ] **Match** against a real job description → expect new response: confidence %, skill match %, matched/missing skill chips, recommendation text
 - [ ] **Tailor** one result → still works (Azure Foundry ResumeAgent, unchanged)
 - [ ] **Chat** with PersonalAssistant → ask about your uploaded resume (context now from Supabase)
 - [ ] **Discover** → search requires login now; ATS search works; extract-from-URL works
-- [ ] Check Supabase dashboard → Table Editor → `documents` + `chunks` have rows after upload
+- [x] Check Supabase dashboard → Table Editor → `documents` + `chunks` have rows after upload
 
 ## 2. Security probes (~10 min)
 
-- [ ] `curl -X POST https://job-nexus-delta.vercel.app/api/search-jobs` (no token) → expect **401**
-- [ ] Burst any endpoint past its hourly limit → expect **429**
-- [ ] `POST /api/extract-job` with `{"url":"http://169.254.169.254/"}` (with token) → expect **400** rejected
-- [ ] Request from a foreign origin → no CORS allow header
+- [x] `curl -X POST https://job-nexus-delta.vercel.app/api/search-jobs` (no token) → expect **401**
+- [x] Burst any endpoint past its hourly limit → expect **429**
+- [x] `POST /api/extract-job` with `{"url":"http://169.254.169.254/"}` (with token) → expect **400** rejected
+- [x] Request from a foreign origin → no CORS allow header
 
 ## 3. Known issues to resolve
 
 - [ ] **JobSpy backend** — `api/search-jobs.mjs` proxies to `JOBSPY_API_URL`. If that pointed at the Azure VM, aggregator search (LinkedIn/Indeed/Google) is dead now. Check where it points. Options: host JobSpy on Fly.io/Render (~$5/mo), or drop aggregator search (ATS + URL-extract still work).
-- [ ] **Scanned-PDF fallback untested** — GPT-4o-mini vision path in `api/v2/analyze.mjs` has not run against a real scanned PDF. Test with one.
+- [ ] **Scanned-PDF fallback untested** — vision path in `api/v2/analyze.mjs` has not run against a real scanned PDF. Test with one.
+- [ ] **Gateway quirks** (documented in `api/_embed.mjs`): `/v1/embeddings` silently returns EMPTY vectors for array input, so we send one string per request (8 concurrent). SDK default base64 encoding also returns empty; `encoding_format: "float"` is forced. No `/v1/moderations` on the gateway (404), so chat moderation is best-effort. Model strings must be exact: `openai/te3s` works, `openai/text-embedding-3-small` returns empty.
+- [ ] **Gateway tool-payload limit** — ASU gateway hangs past 180s with no error at ~12+ tools. Cap any future agent loop at 8-9 tools.
 - [ ] **Rate limit numbers are guesses** — chat 30/hr, match 20/hr, analyze 10/hr etc. (`api/_ratelimit.mjs`). Tune after real usage.
 
-## 4. Cleanup (after 1 week stable — target ~2026-07-26)
+## 4. Cleanup (after 1 week stable — target ~2026-08-27)
 
 - [ ] Azure Portal: **delete** docker-vm-free VM + disk + NIC + public IP
 - [ ] Delete Cosmos DB account
@@ -40,7 +48,8 @@ that puts the new stack live. **Azure VM no longer receives traffic.**
 - [ ] Delete Container Registry (ACR)
 - [ ] **KEEP**: Foundry agents (PersonalAssistant, ResumeAgent) — chat + tailor still use them
 - [ ] Vercel: remove `VM_API` / `VM_API_URL` env vars
-- [ ] Supabase: **disable legacy JWT API keys** (Settings → API Keys → Legacy tab) — only after step 1 verified
+- [ ] Supabase: **disable legacy JWT API keys** (Settings → API Keys → Legacy tab)
+- [x] Supabase: RLS enabled deny-all on documents/chunks/rate_limits (2026-08-20; service-role bypasses it, so app is unaffected)
 - [ ] Update `CLAUDE.md`: delete the VM boot ritual section (no longer needed, ever)
 
 ## 5. Public launch track (after verify)
@@ -57,7 +66,7 @@ that puts the new stack live. **Azure VM no longer receives traffic.**
 
 - **Explainable match "why" panel** — matchedSkills/missingSkills already in v2 responses; could add per-skill evidence quotes
 - **GitHub enrichment for technical candidates** (idea from interviewstreet/hiring-agent) — pull repos, rank contributions on recruiter side
-- **ASU GPT Gateway** — 400+ models for dev/testing (needs endpoint URL + auth format, only model catalog known). Testing only; keep own OpenAI key for prod.
+- **Model swapping** — gateway exposes 123 models at $0. Could A/B `aws/claude5_sonnet` vs `openai/gpt5_4_mini` for match scoring quality via `LLM_FAST_MODEL` / `LLM_SMART_MODEL` env vars, no code change.
 - **WeCongest** — separate project mentioned 2026-07-16, scope undefined
 
 ## Cost after decommission
@@ -66,7 +75,7 @@ that puts the new stack live. **Azure VM no longer receives traffic.**
 |:---|:---|
 | Supabase (job-nexus-prod) | $10 (on Pro org plan) |
 | Vercel | $0 (Hobby) |
-| OpenAI (embeddings + gpt-4o-mini) | ~$1–5 at current scale |
+| LLM calls (embeddings + match scoring) | **$0** — ASU AIML gateway |
 | LlamaParse | $0 (1k pages/day free) |
 | Azure Foundry agents | minimal (pay-per-call) |
-| **Total** | **~$15 vs ~$130–200 before** |
+| **Total** | **~$10 vs ~$130–200 before** |
