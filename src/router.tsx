@@ -7,7 +7,6 @@ import { JobDetail } from './components/JobDetail'
 import { JobForm } from './components/JobForm'
 import { Discover } from './components/Discover'
 import { ResumePipeline } from './components/ResumePipeline'
-import { Chat } from './components/Chat'
 import { useAuth } from './context/AuthProvider'
 
 const rootRoute = createRootRoute({
@@ -73,12 +72,6 @@ const ResumePipelineRoute = createRoute({
   component: withAuth(ResumePipeline),
 })
 
-const ChatRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/chat',
-  component: withAuth(Chat),
-})
-
 // --- Route tree ---
 const routeTree = rootRoute.addChildren([
   LandingRoute,
@@ -89,7 +82,6 @@ const routeTree = rootRoute.addChildren([
   JobDetailRoute,
   EditJobRoute,
   ResumePipelineRoute,
-  ChatRoute,
 ])
 
 export const router = createRouter({ routeTree })

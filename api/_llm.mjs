@@ -17,6 +17,6 @@ export function llm() {
 // Gateway model strings. Exact names matter — variants return empty responses.
 export const MODELS = {
   embed: process.env.LLM_EMBED_MODEL || "openai/te3s",          // text-embedding-3-small, 1536d
-  fast:  process.env.LLM_FAST_MODEL  || "openai/gpt5_4_mini",   // extraction, skill-gap, cheap chat
+  fast:  process.env.LLM_FAST_MODEL  || "openai/gpt5_4_mini",   // extraction, skill-gap, vision fallback
   smart: process.env.LLM_SMART_MODEL || "aws/claude5_sonnet",   // fallback for heavier reasoning
 };

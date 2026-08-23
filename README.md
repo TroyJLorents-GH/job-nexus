@@ -5,7 +5,7 @@ type: readme
 
 # Job Nexus
 
-Your complete job-search command center. Job Nexus is a single-page web app for tracking job applications, discovering open roles across multiple sources, matching your resumes against job descriptions with AI, getting tailoring suggestions, and chatting with an AI career assistant — all in one place.
+Your complete job-search command center. Job Nexus is a single-page web app for tracking job applications, discovering open roles across multiple sources, matching your resumes against job descriptions with AI, and getting tailoring suggestions — all in one place.
 
 The frontend is a React 19 + Vite single-page app. The backend is a set of Vercel serverless functions (Node, `.mjs`) under `api/`. Persistence for tracked applications lives in Firebase Firestore (per-user subcollections). Resume documents and semantic matching are served by an external "VM API" backend (proxied through the serverless functions), with a documented migration plan to move that stack to Supabase pgvector (see `MIGRATION.md`).
 
@@ -21,7 +21,6 @@ The frontend is a React 19 + Vite single-page app. The backend is a set of Verce
 - **Extract job from URL** — Paste a job-posting URL; a serverless function fetches the page, strips HTML, and uses GPT-4.1-mini to extract a clean job description, then hands it off to the resume pipeline.
 - **Resume pipeline** — Upload resumes (PDF/DOCX/TXT), then match them against a pasted or extracted job description. Returns ranked matches with confidence score, skill-match percentage, matched/missing skills, an RRF hybrid-search score breakdown, and a side-by-side skill comparison view.
 - **Resume tailoring** — For any matched resume, get the top 3–5 highest-impact tailoring suggestions from an Azure Foundry "ResumeAgent."
-- **AI chat** — Streaming chat (SSE) backed by OpenAI models (GPT-5, GPT-4.1, GPT-4.1-mini, GPT-4o, GPT-4o-mini) plus an Azure Foundry "PersonalAssistant" agent. Supports a general mode and a code mode, OpenAI moderation pre-checks, conversation history, and local chat-session history (last 20).
 - **Auth** — Firebase Authentication (Google sign-in). Protected routes require a signed-in user; serverless functions verify Firebase ID tokens.
 
 ---
@@ -40,7 +39,6 @@ Browser (React 19 SPA, Vite)
    Vercel Serverless Functions (api/*.mjs, Node)
         │  _auth.mjs verifies the Firebase ID token via firebase-admin
         │
-        ├── chat.mjs          ──► OpenAI (streaming SSE) | Azure Foundry PersonalAssistant
         ├── extract-job.mjs   ──► fetch page HTML → OpenAI GPT-4.1-mini extraction
         ├── tailor-resume.mjs ──► Azure Foundry ResumeAgent
         ├── search-jobs.mjs   ──► JobSpy backend (FastAPI)  [proxy]
@@ -52,7 +50,7 @@ Browser (React 19 SPA, Vite)
 
 ### Routing & auth flow
 
-- Client routing uses TanStack Router (`src/router.tsx`). Public routes: `/` (landing), `/login`, `/discover`. Protected routes (wrapped in a `withAuth` HOC): `/jobs`, `/jobs/new`, `/jobs/$jobId`, `/jobs/$jobId/edit`, `/resume-pipeline`, `/chat`.
+- Client routing uses TanStack Router (`src/router.tsx`). Public routes: `/` (landing), `/login`, `/discover`. Protected routes (wrapped in a `withAuth` HOC): `/jobs`, `/jobs/new`, `/jobs/$jobId`, `/jobs/$jobId/edit`, `/resume-pipeline`.
 - `AuthProvider` (`src/context/AuthProvider.tsx`) exposes `user`, `loading`, `signOut`. The `withAuth` HOC renders `<Login />` if there is no user.
 - All authenticated API calls go through `apiFetch` (`src/services/api.ts`), which attaches the current Firebase ID token as a `Bearer` header. The serverless functions verify it in `api/_auth.mjs`.
 
@@ -111,7 +109,6 @@ Deploys to Vercel. `vercel.json` sets the framework to `vite` and rewrites `/api
 2. **Discover** jobs (`/discover`) via aggregator search or company ATS pages, or **extract** a job from a posting URL.
 3. **Add** interesting jobs to your tracked list (`/jobs`), where you can edit stage/status and add interview-prep notes.
 4. **Resume pipeline** (`/resume-pipeline`): upload resumes, paste/auto-fill a job description, **Match Resumes** to see ranked fit, then **Tailor Resume** for AI suggestions.
-5. **Chat** (`/chat`) with an AI assistant in general or code mode, switching between OpenAI models or the Personal Assistant agent.
 
 ---
 
@@ -136,8 +133,7 @@ From `.env.example`:
 | Variable | Purpose |
 |---|---|
 | `FIREBASE_PROJECT_ID` / `FIREBASE_CLIENT_EMAIL` / `FIREBASE_PRIVATE_KEY` | Firebase Admin service-account credentials (ID-token verification) |
-| `OPENAI_API_KEY` | OpenAI (chat, job extraction, moderation) |
-| `AZURE_TENANT_ID` / `AZURE_CLIENT_ID` / `AZURE_CLIENT_SECRET` / `FOUNDRY_AGENT_ENDPOINT` | Azure Foundry PersonalAssistant agent |
+| `LLM_API_KEY` | ASU AIML gateway token — embeddings, match scoring, job extraction (OpenAI-compatible) |
 | `RESUME_AGENT_TENANT_ID` / `RESUME_AGENT_CLIENT_ID` / `RESUME_AGENT_CLIENT_SECRET` / `RESUME_AGENT_ENDPOINT` | Azure Foundry ResumeAgent (tailoring) |
 | `VM_API` / `VM_API_URL` | VM API backend base URL (resume upload, documents, matching) |
 | `JOBSPY_API_URL` | JobSpy aggregator backend base URL |
@@ -154,7 +150,6 @@ From `.env.example`:
 job-nexus/
 ├── api/                      # Vercel serverless functions (Node, .mjs)
 │   ├── _auth.mjs             # Firebase Admin init + ID-token verification
-│   ├── chat.mjs              # OpenAI streaming chat + Foundry PersonalAssistant
 │   ├── extract-job.mjs       # URL → HTML → GPT-4.1-mini job-description extraction
 │   ├── tailor-resume.mjs     # Foundry ResumeAgent tailoring suggestions
 │   ├── search-jobs.mjs       # Proxy → JobSpy aggregator backend
@@ -167,7 +162,7 @@ job-nexus/
 │   ├── App.tsx
 │   ├── router.tsx            # TanStack Router route tree + withAuth HOC
 │   ├── components/           # Root, Landing, Login, JobList/Detail/Form,
-│   │                         #   Discover, ResumePipeline, Chat
+│   │                         #   Discover, ResumePipeline
 │   ├── context/AuthProvider.tsx
 │   ├── hooks/                # useJobApplications, useDocuments (TanStack Query)
 │   ├── services/
@@ -191,6 +186,5 @@ job-nexus/
 ## Notes
 
 - **Two backends, intentionally:** Firestore holds tracked applications (client SDK), while resume parsing/matching is delegated to an external VM API behind the `vm-*` proxies. See `MIGRATION.md` for the documented plan to replace the Azure VM + Cosmos DB + Azure AI Search + Document Intelligence stack with Supabase pgvector + LlamaParse + OpenAI embeddings.
-- **Streaming chat** uses Server-Sent Events; the chat function also runs an OpenAI moderation check before responding and supports an Azure Foundry agent (`PersonalAssistant`) that runs non-streamed.
 - **Hybrid search scoring** in the resume match UI surfaces an RRF (Reciprocal Rank Fusion) score combining BM25 + vector similarity, normalized into a confidence percentage.
 - **ATS discovery** hits Greenhouse, Lever, and Ashby public board APIs directly with per-source timeouts and soft-fails (partial results + per-source error list).

@@ -20,7 +20,6 @@ correct fusion behavior (it hits both the BM25 and vector lists).
 - [x] **Match** pipeline verified (RRF ranking correct on real resume); still worth one browser run
 - [ ] **Match** against a real job description → expect new response: confidence %, skill match %, matched/missing skill chips, recommendation text
 - [ ] **Tailor** one result → still works (Azure Foundry ResumeAgent, unchanged)
-- [ ] **Chat** with PersonalAssistant → ask about your uploaded resume (context now from Supabase)
 - [ ] **Discover** → search requires login now; ATS search works; extract-from-URL works
 - [x] Check Supabase dashboard → Table Editor → `documents` + `chunks` have rows after upload
 
@@ -35,9 +34,9 @@ correct fusion behavior (it hits both the BM25 and vector lists).
 
 - [ ] **JobSpy backend** — `api/search-jobs.mjs` proxies to `JOBSPY_API_URL`. If that pointed at the Azure VM, aggregator search (LinkedIn/Indeed/Google) is dead now. Check where it points. Options: host JobSpy on Fly.io/Render (~$5/mo), or drop aggregator search (ATS + URL-extract still work).
 - [ ] **Scanned-PDF fallback untested** — vision path in `api/v2/analyze.mjs` has not run against a real scanned PDF. Test with one.
-- [ ] **Gateway quirks** (documented in `api/_embed.mjs`): `/v1/embeddings` silently returns EMPTY vectors for array input, so we send one string per request (8 concurrent). SDK default base64 encoding also returns empty; `encoding_format: "float"` is forced. No `/v1/moderations` on the gateway (404), so chat moderation is best-effort. Model strings must be exact: `openai/te3s` works, `openai/text-embedding-3-small` returns empty.
+- [ ] **Gateway quirks** (documented in `api/_embed.mjs`): `/v1/embeddings` silently returns EMPTY vectors for array input, so we send one string per request (8 concurrent). SDK default base64 encoding also returns empty; `encoding_format: "float"` is forced. Model strings must be exact: `openai/te3s` works, `openai/text-embedding-3-small` returns empty.
 - [ ] **Gateway tool-payload limit** — ASU gateway hangs past 180s with no error at ~12+ tools. Cap any future agent loop at 8-9 tools.
-- [ ] **Rate limit numbers are guesses** — chat 30/hr, match 20/hr, analyze 10/hr etc. (`api/_ratelimit.mjs`). Tune after real usage.
+- [ ] **Rate limit numbers are guesses** — match 20/hr, analyze 10/hr, extract 20/hr etc. (`api/_ratelimit.mjs`). Tune after real usage.
 
 ## 4. Cleanup (after 1 week stable — target ~2026-08-27)
 
@@ -46,7 +45,8 @@ correct fusion behavior (it hits both the BM25 and vector lists).
 - [ ] Delete Azure AI Search resource
 - [ ] Delete Document Intelligence resource
 - [ ] Delete Container Registry (ACR)
-- [ ] **KEEP**: Foundry agents (PersonalAssistant, ResumeAgent) — chat + tailor still use them
+- [ ] **KEEP**: Foundry `ResumeAgent` — tailor still uses it. `PersonalAssistant` agent is now unused (chat removed 2026-08-23) — can delete it.
+- [ ] Vercel: remove dead env vars `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `FOUNDRY_AGENT_ENDPOINT` (only chat.mjs used them)
 - [ ] Vercel: remove `VM_API` / `VM_API_URL` env vars
 - [ ] Supabase: **disable legacy JWT API keys** (Settings → API Keys → Legacy tab)
 - [x] Supabase: RLS enabled deny-all on documents/chunks/rate_limits (2026-08-20; service-role bypasses it, so app is unaffected)
@@ -58,7 +58,6 @@ correct fusion behavior (it hits both the BM25 and vector lists).
 - [ ] Sentry (free 5k errors/mo) for error monitoring
 - [ ] Privacy policy page — resumes are PII, required before marketing
 - [ ] Onboarding polish: first-run walkthrough or demo mode
-- [ ] Persist chat history (currently memory-only, lost on reload)
 - [ ] Retention features (PR 3 idea): watchlists + saved searches + Vercel cron email digest (Resend free tier)
 - [ ] Smoke tests for the 8 API handlers (repo has zero tests)
 

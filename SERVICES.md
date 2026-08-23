@@ -16,12 +16,12 @@ External hosted/cloud services this project depends on, detected from configurat
 - **Evidence:** `firebase` client SDK + `firebase-admin` (`api/_auth.mjs`); `VITE_FIREBASE_*` client config and `FIREBASE_PROJECT_ID` / `FIREBASE_CLIENT_EMAIL` / `FIREBASE_PRIVATE_KEY` admin credentials.
 
 ## OpenAI
-- **Role:** Chat completions (streaming SSE), job-description extraction (GPT-4.1-mini), and content moderation.
-- **Evidence:** `openai` package; `OPENAI_API_KEY`; usage in `api/chat.mjs` and `api/extract-job.mjs`.
+- **Role:** Embeddings, match scoring, and job-description extraction via the ASU AIML gateway (OpenAI-compatible).
+- **Evidence:** `openai` package; `LLM_API_KEY`; `api/_llm.mjs`, `api/_embed.mjs`, `api/v2/match-job.mjs`, `api/extract-job.mjs`.
 
 ## Azure AI Foundry (Microsoft Azure)
-- **Role:** Two managed agents — `PersonalAssistant` (chat) and `ResumeAgent` (resume tailoring), accessed via OpenAI-protocol responses endpoints with Azure AD client-credential auth.
-- **Evidence:** `@azure/identity` (`ClientSecretCredential`); `AZURE_TENANT_ID/CLIENT_ID/CLIENT_SECRET` + `FOUNDRY_AGENT_ENDPOINT`; `RESUME_AGENT_*` vars + `RESUME_AGENT_ENDPOINT`; usage in `api/chat.mjs` and `api/tailor-resume.mjs`.
+- **Role:** One managed agent — `ResumeAgent` (resume tailoring), accessed via OpenAI-protocol responses endpoint with Azure AD client-credential auth.
+- **Evidence:** `@azure/identity` (`ClientSecretCredential`); `RESUME_AGENT_*` vars + `RESUME_AGENT_ENDPOINT`; usage in `api/tailor-resume.mjs`.
 
 ## VM API (self-hosted backend)
 - **Role:** Resume upload/parse, document listing/retrieval/deletion, and hybrid-search job matching.

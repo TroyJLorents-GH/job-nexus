@@ -5,7 +5,6 @@ const WINDOW_MS = 60 * 60 * 1000; // 1 hour
 
 // Requests per hour per user, per route
 export const LIMITS = {
-  chat: 30,
   "match-job": 20,
   "extract-job": 20,
   "tailor-resume": 10,

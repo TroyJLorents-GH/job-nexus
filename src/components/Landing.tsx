@@ -1,4 +1,4 @@
-import { Briefcase, ListChecks, FileText, Search, MessageSquare, Link } from 'lucide-react'
+import { Briefcase, ListChecks, FileText, Search, Link } from 'lucide-react'
 
 export function Landing() {
   return (
@@ -31,11 +31,6 @@ export function Landing() {
             icon={FileText}
             title="Tailor resumes"
             desc="Get specific suggestions to optimize your resume for any job."
-          />
-          <Feature
-            icon={MessageSquare}
-            title="AI chat"
-            desc="Ask questions, prep for interviews, and get career advice."
           />
           <Feature
             icon={Link}

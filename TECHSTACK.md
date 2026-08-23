@@ -21,7 +21,7 @@ type: techstack
 | `@tanstack/react-query-devtools` | ^5.85 | React Query devtools in development. |
 | `@tanstack/react-table` | ^8.21 | Tabular rendering for job lists. |
 | `firebase` | ^11.0 | Client SDK — Firebase Auth (Google sign-in) and Firestore (tracked applications). |
-| `react-markdown` | ^9.0 | Render markdown chat/assistant output. |
+| `react-markdown` | ^9.0 | Render markdown tailoring output. |
 | `remark-gfm` | ^4.0 | GitHub-flavored markdown plugin for `react-markdown`. |
 | `lucide-react` | ^0.541 | Icon set. |
 | `date-fns` | ^4.1 | Date formatting/manipulation. |
@@ -32,7 +32,7 @@ type: techstack
 | Library | Version | Purpose |
 |---|---|---|
 | `firebase-admin` | ^13.7 | Verify Firebase ID tokens server-side (`api/_auth.mjs`). |
-| `openai` | ^6.33 | OpenAI client — streaming chat, job extraction, moderation. |
+| `openai` | ^6.33 | OpenAI-compatible client pointed at the ASU AIML gateway — embeddings, match scoring, job extraction. |
 | `@azure/identity` | ^4.13 | `ClientSecretCredential` to obtain Azure AD tokens for Foundry agents. |
 
 ## Build Tools & Config
@@ -58,8 +58,8 @@ type: techstack
 
 ## External APIs & Services (consumed)
 
-- **OpenAI API** — chat completions (GPT-5 / GPT-4.1 / GPT-4.1-mini / GPT-4o / GPT-4o-mini), moderation, and job-description extraction.
-- **Azure AI Foundry** — two agents: `PersonalAssistant` (chat) and `ResumeAgent` (resume tailoring), reached via OpenAI-protocol responses endpoints with Azure AD bearer tokens.
+- **ASU AIML gateway** (OpenAI-compatible) — embeddings (`openai/te3s`), match scoring + job-description extraction (`openai/gpt5_4_mini`). See `api/_llm.mjs`.
+- **Azure AI Foundry** — one agent: `ResumeAgent` (resume tailoring), reached via OpenAI-protocol responses endpoint with Azure AD bearer token.
 - **Firebase** — Authentication (Google) and Firestore.
 - **VM API** (external resume backend) — `/analyze`, `/documents`, `/match-job`; proxied through `api/vm-*.mjs`.
 - **JobSpy backend** (FastAPI) — aggregator job search across LinkedIn, Indeed, Google; proxied through `api/search-jobs.mjs`.
