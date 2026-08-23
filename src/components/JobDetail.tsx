@@ -5,6 +5,7 @@ import { ArrowLeft, Edit, ExternalLink, Plus } from 'lucide-react'
 import { useJobApplication, useAddInterviewPrep } from '../hooks/useJobApplications'
 
 const stageColors: Record<string, string> = {
+  saved: 'bg-slate-100 text-slate-700',
   applied: 'bg-blue-100 text-blue-800',
   phone_screen: 'bg-yellow-100 text-yellow-800',
   technical_interview: 'bg-purple-100 text-purple-800',
@@ -15,6 +16,7 @@ const stageColors: Record<string, string> = {
 }
 
 const stageLabels: Record<string, string> = {
+  saved: 'Saved',
   applied: 'Applied',
   phone_screen: 'Phone Screen',
   technical_interview: 'Technical Interview',

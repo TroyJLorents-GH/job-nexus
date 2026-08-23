@@ -17,20 +17,49 @@ import { checkRateLimit } from "./_ratelimit.mjs";
 const FETCH_TIMEOUT_MS = 8000;
 const MAX_COMPANIES = 15;
 
-function stripHtml(html) {
-  if (!html) return "";
-  return html
-    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
-    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
-    .replace(/<[^>]+>/g, " ")
+function decodeEntities(text) {
+  return text
     .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
+    .replace(/&mdash;/g, "—")
+    .replace(/&ndash;/g, "–")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, "&");
+}
+
+function stripHtml(html) {
+  if (!html) return "";
+  // Greenhouse double-escapes its content, so decode twice.
+  return decodeEntities(decodeEntities(html))
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+    .replace(/<[^>]+>/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/**
+ * Greenhouse has no pay field on the board API, but most pay-transparent
+ * postings state the range inline. Requires two comma-grouped dollar amounts,
+ * which avoids matching equity or revenue figures.
+ */
+const PAY_RANGE_RE = /\$\s?(\d{2,3}(?:,\d{3})+)\s*(?:-|–|—|to)\s*\$?\s?(\d{2,3}(?:,\d{3})+)/;
+
+function extractPayFromText(text) {
+  const m = PAY_RANGE_RE.exec(text || "");
+  if (!m) return undefined;
+  return formatPay(Number(m[1].replace(/,/g, "")), Number(m[2].replace(/,/g, "")), "USD");
+}
+
+/** Render a pay range as a short display string, e.g. "$120k - $160k". */
+function formatPay(min, max, currency) {
+  const nums = [min, max].map((n) => (n == null ? null : Number(n))).filter((n) => n && n > 0);
+  if (nums.length === 0) return undefined;
+  const sym = currency === "USD" || !currency ? "$" : `${currency} `;
+  const fmt = (n) => (n >= 1000 ? `${sym}${Math.round(n / 1000)}k` : `${sym}${n}`);
+  return nums.length === 2 && nums[0] !== nums[1] ? `${fmt(nums[0])} - ${fmt(nums[1])}` : fmt(nums[0]);
 }
 
 function titleCaseSlug(slug) {
@@ -62,8 +91,9 @@ async function fetchGreenhouse(slug, displayName) {
       title: j.title,
       company,
       location: j.location?.name || j.offices?.[0]?.name || "",
-      salary: undefined,
+      salary: extractPayFromText(plain),
       job_url: j.absolute_url,
+      job_id: String(j.id ?? ""),
       site: "greenhouse",
       date_posted: j.updated_at,
       description: plain.slice(0, 300),
@@ -82,12 +112,14 @@ async function fetchLever(slug, displayName) {
     const plain = j.descriptionPlain || stripHtml(j.description);
     const loc = j.categories?.location || "";
     const posted = j.createdAt ? new Date(j.createdAt).toISOString() : undefined;
+    const range = j.salaryRange;
     return {
       title: j.text,
       company,
       location: loc,
-      salary: undefined,
+      salary: formatPay(range?.min, range?.max, range?.currency),  // {interval, currency, min, max}
       job_url: j.hostedUrl,
+      job_id: j.id,
       site: "lever",
       date_posted: posted,
       description: plain.slice(0, 300),
@@ -97,7 +129,7 @@ async function fetchLever(slug, displayName) {
 }
 
 async function fetchAshby(slug, displayName) {
-  const url = `https://api.ashbyhq.com/posting-api/job-board/${encodeURIComponent(slug)}`;
+  const url = `https://api.ashbyhq.com/posting-api/job-board/${encodeURIComponent(slug)}?includeCompensation=true`;
   const res = await fetchWithTimeout(url);
   if (!res.ok) throw new Error(`Ashby ${slug}: HTTP ${res.status}`);
   const data = await res.json();
@@ -106,12 +138,18 @@ async function fetchAshby(slug, displayName) {
     .filter((j) => j.isListed !== false)
     .map((j) => {
       const plain = j.descriptionPlain || stripHtml(j.descriptionHtml);
+      const salaryComp = j.compensation?.compensationTiers?.find((t) =>
+        /salary/i.test(t.componentSummaries?.[0]?.summary || t.title || "")
+      ) || j.compensation?.compensationTiers?.[0];
       return {
         title: j.title,
         company,
         location: j.location || j.address?.postalAddressRegion || "",
-        salary: undefined,
+        salary:
+          salaryComp?.tierSummary ||
+          formatPay(salaryComp?.minValue, salaryComp?.maxValue, salaryComp?.currencyCode),
         job_url: j.jobUrl,
+        job_id: j.id,
         site: "ashby",
         date_posted: j.publishedDate,
         description: plain.slice(0, 300),

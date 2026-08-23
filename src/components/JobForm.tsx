@@ -5,6 +5,7 @@ import { useJobApplication, useCreateJobApplication, useUpdateJobApplication } f
 import type { JobApplicationFormData, JobStage, JobStatus } from '../types/job'
 
 const stageOptions = [
+  { value: 'saved', label: 'Saved' },
   { value: 'applied', label: 'Applied' },
   { value: 'phone_screen', label: 'Phone Screen' },
   { value: 'technical_interview', label: 'Technical Interview' },

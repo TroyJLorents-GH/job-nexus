@@ -1,10 +1,23 @@
+// Resume tailoring — rewrites nothing, returns prioritized suggestions.
+// Runs on the LLM gateway (was Azure Foundry ResumeAgent).
 import { initFirebase, verifyToken } from "./_auth.mjs";
 import { handleCors, sendAuthError } from "./_http.mjs";
 import { checkRateLimit } from "./_ratelimit.mjs";
+import { llm, MODELS } from "./_llm.mjs";
 
 initFirebase();
 
 const MAX_TEXT_CHARS = 20000;
+
+const SYSTEM_PROMPT = `You are an expert resume coach. Given a resume, a target job description, and a skill-gap analysis, return the highest-impact edits that would make this resume win an interview for THIS job.
+
+Rules:
+- Be specific. Quote the exact resume line to change and give the replacement wording.
+- Mirror terminology from the job description so the resume survives keyword screens.
+- Never invent experience, employers, dates, or credentials the resume does not support. For genuine gaps, suggest how to surface adjacent/transferable experience the candidate actually has, or say to leave it alone.
+- Prioritize: highest impact first. 3-5 changes, not a rewrite.
+
+Return markdown: a numbered list. Each item = a bold one-line summary, then "Current:" and "Suggested:" lines, then one sentence of why it matters for this job.`;
 
 export default async function handler(req, res) {
   if (handleCors(req, res, ["POST"])) return;
@@ -25,68 +38,26 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "resumeText and jobDescription are required" });
     }
 
-    // Call ResumeAgent via Azure Foundry
-    const { ClientSecretCredential } = await import("@azure/identity");
+    const userPrompt =
+      `JOB DESCRIPTION:\n${jobDescription}\n\n` +
+      `RESUME:\n${resumeText}\n\n` +
+      `Already demonstrated: ${matchedSkills.join(", ") || "(none identified)"}\n` +
+      `Missing or weak: ${missingSkills.join(", ") || "(none identified)"}\n\n` +
+      `Give the top 3-5 highest-impact changes.`;
 
-    const credential = new ClientSecretCredential(
-      process.env.RESUME_AGENT_TENANT_ID,
-      process.env.RESUME_AGENT_CLIENT_ID,
-      process.env.RESUME_AGENT_CLIENT_SECRET
-    );
-
-    const token = await credential.getToken("https://ai.azure.com/.default");
-
-    const prompt =
-      `TAILOR MODE\n\n` +
-      `Job Description:\n${jobDescription}\n\n` +
-      `My Resume:\n${resumeText}\n\n` +
-      `Matched Skills: ${matchedSkills.join(", ")}\n` +
-      `Missing/Weak Skills: ${missingSkills.join(", ")}\n\n` +
-      `Give me your top 3-5 highest-impact changes to tailor this resume for this job.`;
-
-    const resp = await fetch(process.env.RESUME_AGENT_ENDPOINT, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token.token}`,
-      },
-      body: JSON.stringify({ input: [{ role: "user", content: prompt }] }),
+    const resp = await llm().chat.completions.create({
+      model: MODELS.smart,
+      temperature: 0.4,
+      max_tokens: 1500,
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: userPrompt },
+      ],
     });
 
-    if (!resp.ok) {
-      const errText = await resp.text();
-      throw new Error(`ResumeAgent returned ${resp.status}: ${errText}`);
-    }
-
-    const data = await resp.json();
-
-    // Extract response (multiple format support)
-    let suggestions = "";
-    if (data.output_text) {
-      suggestions = data.output_text;
-    } else if (data.output && Array.isArray(data.output)) {
-      for (const item of data.output) {
-        if (item.type === "message" && item.role === "assistant") {
-          const content = item.content || [];
-          if (Array.isArray(content)) {
-            for (const c of content) {
-              if (c.type === "output_text" && c.text) {
-                suggestions = c.text;
-                break;
-              }
-            }
-          } else {
-            suggestions = String(content);
-          }
-          break;
-        }
-      }
-    } else if (data.choices?.[0]?.message?.content) {
-      suggestions = data.choices[0].message.content;
-    }
-
+    const suggestions = resp.choices?.[0]?.message?.content?.trim();
     if (!suggestions) {
-      suggestions = "ResumeAgent did not return a response. Please try again.";
+      return res.status(502).json({ error: "No suggestions generated. Please try again." });
     }
 
     return res.status(200).json({ suggestions });

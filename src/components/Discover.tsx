@@ -10,6 +10,8 @@ interface JobResult {
   location: string
   salary?: string
   job_url: string
+  /** Board-native id, used later to re-check whether the posting is still live. */
+  job_id?: string
   site: string
   date_posted?: string
   description?: string
@@ -137,13 +139,16 @@ export function Discover() {
       await createJob.mutateAsync({
         company: job.company,
         position: job.title,
-        appliedDate: new Date().toISOString().split('T')[0],
-        stage: 'applied',
+        // Saved, not applied - the user has not sent anything yet.
+        stage: 'saved',
         status: 'active',
         location: job.location,
         salary: job.salary,
         jobUrl: job.job_url,
-        notes: `Found on ${job.site}\n\n${job.full_description || job.description || ''}`,
+        source: job.site,
+        sourceJobId: job.job_id,
+        jobDescription: job.full_description || job.description || '',
+        notes: `Found on ${job.site}`,
       })
     } catch (err) {
       console.error('Failed to add job:', err)
