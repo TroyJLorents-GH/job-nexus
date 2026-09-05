@@ -4,6 +4,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useDocuments, useUploadDocument, useDeleteDocument } from '../hooks/useDocuments'
 import { apiFetch } from '../services/api'
+import { errorMessage } from '../lib/errors'
 
 interface MatchResult {
   documentId: string
@@ -53,7 +54,7 @@ export function ResumePipeline() {
     try {
       await uploadDoc.mutateAsync(file)
     } catch (err) {
-      setError((err as Error).message)
+      setError(`Couldn't upload that resume. ${errorMessage(err)}`)
     }
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
@@ -160,7 +161,11 @@ export function ResumePipeline() {
                       <span className="text-sm text-gray-700 truncate">{doc.filename || doc.name || doc.id}</span>
                     </div>
                     <button
-                      onClick={() => deleteDoc.mutate(doc.id)}
+                      onClick={() =>
+                        deleteDoc.mutate(doc.id, {
+                          onError: (err) => setError(`Couldn't delete that resume. ${errorMessage(err)}`),
+                        })
+                      }
                       className="text-gray-400 hover:text-red-600 flex-shrink-0"
                     >
                       <Trash2 className="h-4 w-4" />

@@ -3,6 +3,7 @@ import { useParams, Link } from '@tanstack/react-router'
 import { format } from 'date-fns'
 import { ArrowLeft, Edit, ExternalLink, Plus } from 'lucide-react'
 import { useJobApplication, useAddInterviewPrep } from '../hooks/useJobApplications'
+import { ErrorBanner } from './ErrorBanner'
 
 const stageColors: Record<string, string> = {
   applied: 'bg-blue-100 text-blue-800',
@@ -141,6 +142,12 @@ export function JobDetail() {
                 onChange={(e) => setPrepContent(e.target.value)}
                 rows={3}
                 className="w-full mb-2 p-2 border border-gray-300 rounded"
+              />
+              <ErrorBanner
+                error={addInterviewPrep.error}
+                action="save that note"
+                onDismiss={() => addInterviewPrep.reset()}
+                className="mb-2"
               />
               <div className="flex space-x-2">
                 <button
