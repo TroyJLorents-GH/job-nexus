@@ -3,6 +3,7 @@ import { useMatch, Link, useNavigate } from '@tanstack/react-router'
 import { ArrowLeft } from 'lucide-react'
 import { useJobApplication, useCreateJobApplication, useUpdateJobApplication } from '../hooks/useJobApplications'
 import type { JobApplicationFormData, JobStage, JobStatus } from '../types/job'
+import { ErrorBanner } from './ErrorBanner'
 
 const stageOptions = [
   { value: 'applied', label: 'Applied' },
@@ -93,6 +94,11 @@ export function JobForm() {
           </div>
 
           <form onSubmit={handleSubmit} className="px-6 py-4 space-y-6">
+            <ErrorBanner
+              error={createJob.error || updateJob.error}
+              action={isEditing ? 'update this job' : 'create this job'}
+              onDismiss={() => { createJob.reset(); updateJob.reset() }}
+            />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label htmlFor="company" className="block text-sm font-medium text-gray-700">Company *</label>

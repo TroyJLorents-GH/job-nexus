@@ -12,6 +12,7 @@ import { format, isValid } from 'date-fns'
 import { Search, Filter, Edit, Trash2, Eye } from 'lucide-react'
 import { useJobApplications, useDeleteJobApplication } from '../hooks/useJobApplications'
 import type { JobApplication, JobStage } from '../types/job'
+import { ErrorBanner } from './ErrorBanner'
 
 const columnHelper = createColumnHelper<JobApplication>()
 
@@ -202,6 +203,13 @@ export function JobList() {
           </Link>
         </div>
       </div>
+
+      <ErrorBanner
+        error={deleteJob.error}
+        action="delete that job"
+        onDismiss={() => deleteJob.reset()}
+        className="mt-6"
+      />
 
       {/* Filters */}
       <div className="mt-6 flex flex-col sm:flex-row gap-4">

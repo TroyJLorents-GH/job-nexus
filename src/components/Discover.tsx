@@ -3,6 +3,7 @@ import { Search, MapPin, Building, DollarSign, ExternalLink, Plus, Clock, FileTe
 import { useAuth } from '../context/AuthProvider'
 import { useCreateJobApplication } from '../hooks/useJobApplications'
 import { apiFetch } from '../services/api'
+import { errorMessage } from '../lib/errors'
 
 interface JobResult {
   title: string
@@ -147,6 +148,7 @@ export function Discover() {
       })
     } catch (err) {
       console.error('Failed to add job:', err)
+      setError(`Couldn't add that job. ${errorMessage(err)}`)
     } finally {
       setAddingJob(null)
     }
